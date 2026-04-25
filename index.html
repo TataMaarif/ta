@@ -3,140 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K3 Lab MQTT Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+    <title>Dashboard Monitoring Lab Multi-Node</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --safe: #00fa9a; --danger: #ff4b4b; --circle-bg: rgba(255, 255, 255, 0.1);
+            --bg-dark: #0f172a; --sidebar-bg: #1e293b; --card-blue: #3b82f6;
+            --card-green: #10b981; --card-purple: #8b5cf6; --card-orange: #f59e0b;
+            --text-main: #ffffff; --text-dim: #94a3b8;
         }
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-            color: white; text-align: center; margin: 0; padding: 40px 20px;
-        }
-        #statusBanner {
-            display: inline-block; padding: 12px 40px; border-radius: 30px;
-            font-weight: 700; background: rgba(0, 250, 154, 0.15);
-            color: var(--safe); border: 1px solid rgba(0, 250, 154, 0.3);
-            margin-bottom: 40px; transition: all 0.4s;
-        }
-        #statusBanner.bahaya { 
-            background: rgba(255, 75, 75, 0.15); color: var(--danger);
-            border: 1px solid rgba(255, 75, 75, 0.3); animation: pulse 1.5s infinite; 
-        }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 25px; }
-        .card {
-            background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(15px);
-            padding: 30px; border-radius: 20px; width: 200px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        }
-        .gauge-container { position: relative; width: 130px; height: 130px; margin: 0 auto; }
-        svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-        .circle-bg { fill: none; stroke: var(--circle-bg); stroke-width: 8; }
-        .circle-value {
-            fill: none; stroke-width: 8; stroke-linecap: round;
-            stroke-dasharray: 282.7; stroke-dashoffset: 282.7;
-            transition: stroke-dashoffset 0.8s ease-out;
-        }
-        #svg-suhu { stroke: #ff9e80; } #svg-gas { stroke: #b388ff; } #svg-bising { stroke: #69f0ae; }
-        .gauge-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8em; font-weight: 700; }
-        .unit { font-size: 0.4em; color: #ccc; display: block; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-dark); color: var(--text-main); margin: 0; display: flex; height: 100vh; }
+        
+        /* Sidebar */
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .lab-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 30px; }
+        .nav-item { padding: 12px 20px; border-radius: 12px; cursor: pointer; color: var(--text-dim); transition: 0.3s; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); }
+        .nav-item.active { background-color: var(--card-blue); color: white; }
+
+        /* Main Content */
+        .main-content { flex: 1; padding: 40px; overflow-y: auto; }
+        .page { display: none; }
+        .page.active { display: block; }
+        
+        .header { margin-bottom: 30px; }
+        .header h1 { margin: 0; font-size: 1.8rem; }
+        
+        .grid-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 25px; margin-bottom: 25px; }
+        .card { padding: 25px; border-radius: 24px; min-height: 140px; }
+        .card-title { font-size: 0.9rem; opacity: 0.8; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .card-value { font-size: 2.8rem; font-weight: 600; }
+        
+        .status-bar { background: #064e3b; padding: 15px 25px; border-radius: 20px; display: flex; align-items: center; gap: 15px; border: 1px solid #059669; }
+        .status-bar.danger { background: #7f1d1d; border-color: #ef4444; }
+
+        .blue { background: var(--card-blue); } .green { background: var(--card-green); }
+        .purple { background: var(--card-purple); } .orange { background: var(--card-orange); }
     </style>
 </head>
 <body>
 
-    <h1>Monitoring K3 Lab </h1>
-    <div id="statusBanner">STATUS: MENGHUBUNGKAN...</div>
+    <div class="sidebar">
+        <div class="lab-title">Lab. Telkom Barat I/04</div>
+        <div class="nav-item active" onclick="showPage('dashboard', this)">🏠 Dashboard (Avg)</div>
+        <div class="nav-item" onclick="showPage('node1', this)">🧩 Node 1</div>
+        <div class="nav-item" onclick="showPage('node2', this)">🧩 Node 2</div>
+    </div>
 
-    <div class="grid">
-        <div class="card">
-            <h3>Suhu</h3>
-            <div class="gauge-container">
-                <svg viewBox="0 0 100 100">
-                    <circle class="circle-bg" cx="50" cy="50" r="45"></circle>
-                    <circle id="svg-suhu" class="circle-value" cx="50" cy="50" r="45"></circle>
-                </svg>
-                <div class="gauge-text"><span id="valSuhu">0</span><span class="unit">°C</span></div>
+    <div class="main-content">
+        <div id="dashboard" class="page active">
+            <div class="header"><h1>Dashboard Utama</h1><p>Rata-rata Kondisi Lab (Node 1 + Node 2)</p></div>
+            <div class="grid-container">
+                <div class="card blue"><div class="card-title">🌡️ Avg Suhu</div><div class="card-value"><span id="avgSuhu">0</span>°C</div></div>
+                <div class="card green"><div class="card-title">💧 Avg Kelembaban</div><div class="card-value"><span id="avgHum">0</span>%</div></div>
+                <div class="card purple"><div class="card-title">☁️ Avg Gas</div><div class="card-value" id="avgGas">0</div></div>
+                <div class="card orange"><div class="card-title">🔊 Avg Bising</div><div class="card-value"><span id="avgBising">0</span>dB</div></div>
             </div>
         </div>
 
-        <div class="card">
-            <h3>Gas (VOC)</h3>
-            <div class="gauge-container">
-                <svg viewBox="0 0 100 100">
-                    <circle class="circle-bg" cx="50" cy="50" r="45"></circle>
-                    <circle id="svg-gas" class="circle-value" cx="50" cy="50" r="45"></circle>
-                </svg>
-                <div class="gauge-text"><span id="valGas">0</span><span class="unit">AQI</span></div>
+        <div id="node1" class="page">
+            <div class="header"><h1>Monitoring Node 1</h1><p>Data Real-time Alat 1 (Depan)</p></div>
+            <div class="grid-container">
+                <div class="card blue"><div class="card-title">🌡️ Suhu N1</div><div class="card-value"><span id="n1Suhu">0</span>°C</div></div>
+                <div class="card green"><div class="card-title">💧 Hum N1</div><div class="card-value"><span id="n1Hum">0</span>%</div></div>
+                <div class="card purple"><div class="card-title">☁️ Gas N1</div><div class="card-value" id="n1Gas">0</div></div>
+                <div class="card orange"><div class="card-title">🔊 Bising N1</div><div class="card-value"><span id="n1Bising">0</span>dB</div></div>
             </div>
         </div>
 
-        <div class="card">
-            <h3>Kebisingan</h3>
-            <div class="gauge-container">
-                <svg viewBox="0 0 100 100">
-                    <circle class="circle-bg" cx="50" cy="50" r="45"></circle>
-                    <circle id="svg-bising" class="circle-value" cx="50" cy="50" r="45"></circle>
-                </svg>
-                <div class="gauge-text"><span id="valBising">0</span><span class="unit">dB</span></div>
+        <div id="node2" class="page">
+            <div class="header"><h1>Monitoring Node 2</h1><p>Data Real-time Alat 2 (Belakang)</p></div>
+            <div class="grid-container">
+                <div class="card blue"><div class="card-title">🌡️ Suhu N2</div><div class="card-value"><span id="n2Suhu">0</span>°C</div></div>
+                <div class="card green"><div class="card-title">💧 Hum N2</div><div class="card-value"><span id="n2Hum">0</span>%</div></div>
+                <div class="card purple"><div class="card-title">☁️ Gas N2</div><div class="card-value" id="n2Gas">0</div></div>
+                <div class="card orange"><div class="card-title">🔊 Bising N2</div><div class="card-value"><span id="n2Bising">0</span>dB</div></div>
             </div>
+        </div>
+
+        <div id="statusBar" class="status-bar">
+            <div style="font-size: 1.5rem;">🛡️</div>
+            <div><div style="font-size: 0.8rem; opacity: 0.8;">Status Keseluruhan</div><div id="statusTxt" style="font-weight: 600;">SISTEM AMAN</div></div>
         </div>
     </div>
 
     <script>
-        // PENGATURAN MQTT
-        const MQTT_HOST = "broker.hivemq.com";
-        const MQTT_PORT = 8000; // Port Websocket untuk Browser
-        const CLIENT_ID = "Web_K3_Client_" + Math.random().toString(16).substr(2, 8);
+        // Data Store
+        let data = {
+            n1: { suhu: 0, hum: 0, gas: 0, bising: 0 },
+            n2: { suhu: 0, hum: 0, gas: 0, bising: 0 }
+        };
 
-        const client = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, CLIENT_ID);
-
-        client.onConnectionLost = onConnectionLost;
-        client.onMessageArrived = onMessageArrived;
-
-        client.connect({ onSuccess: onConnect });
-
-        function onConnect() {
-            console.log("Connected to MQTT Broker");
-            document.getElementById('statusBanner').innerText = "STATUS: AMAN ✓";
-            // Subscribe ke topik yang sama dengan ESP32
-            client.subscribe("kampus/k3lab/suhu");
-            client.subscribe("kampus/k3lab/gas");
-            client.subscribe("kampus/k3lab/bising");
-            client.subscribe("kampus/k3lab/status");
+        function showPage(pageId, elm) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            elm.classList.add('active');
         }
 
-        function onConnectionLost(responseObject) {
-            document.getElementById('statusBanner').innerText = "STATUS: TERPUTUS";
-        }
+        const client = new Paho.MQTT.Client("broker.hivemq.com", 8000, "WebClient_" + Math.random().toString(16).substr(2, 4));
 
-        function onMessageArrived(message) {
-            const topic = message.destinationName;
-            const payload = message.payloadString;
+        client.onMessageArrived = (msg) => {
+            const t = msg.destinationName;
+            const v = parseFloat(msg.payloadString);
 
-            if (topic === "kampus/k3lab/suhu") updateUI('valSuhu', 'svg-suhu', payload, 50);
-            if (topic === "kampus/k3lab/gas") updateUI('valGas', 'svg-gas', payload, 500);
-            if (topic === "kampus/k3lab/bising") updateUI('valBising', 'svg-bising', payload, 120);
-            if (topic === "kampus/k3lab/status") {
-                const banner = document.getElementById('statusBanner');
-                if (payload === "BAHAYA") {
-                    banner.innerText = "⚠️ STATUS: BAHAYA ⚠️";
-                    banner.className = "bahaya";
-                } else {
-                    banner.innerText = "STATUS: AMAN ✓";
-                    banner.className = "";
-                }
+            // Parsing Topik (Asumsi topik: kampus/k3lab/n1/suhu)
+            if (t.includes("/n1/suhu")) data.n1.suhu = v;
+            if (t.includes("/n1/hum"))  data.n1.hum  = v;
+            if (t.includes("/n1/gas"))  data.n1.gas  = v;
+            if (t.includes("/n1/bising")) data.n1.bising = v;
+
+            if (t.includes("/n2/suhu")) data.n2.suhu = v;
+            if (t.includes("/n2/hum"))  data.n2.hum  = v;
+            if (t.includes("/n2/gas"))  data.n2.gas  = v;
+            if (t.includes("/n2/bising")) data.n2.bising = v;
+
+            updateUI();
+        };
+
+        function updateUI() {
+            // Update UI Node 1
+            document.getElementById('n1Suhu').innerText = data.n1.suhu.toFixed(1);
+            document.getElementById('n1Hum').innerText = data.n1.hum.toFixed(1);
+            document.getElementById('n1Gas').innerText = data.n1.gas;
+            document.getElementById('n1Bising').innerText = data.n1.bising.toFixed(1);
+
+            // Update UI Node 2
+            document.getElementById('n2Suhu').innerText = data.n2.suhu.toFixed(1);
+            document.getElementById('n2Hum').innerText = data.n2.hum.toFixed(1);
+            document.getElementById('n2Gas').innerText = data.n2.gas;
+            document.getElementById('n2Bising').innerText = data.n2.bising.toFixed(1);
+
+            // Hitung Rata-rata
+            const avgS = (data.n1.suhu + data.n2.suhu) / 2;
+            const avgH = (data.n1.hum + data.n2.hum) / 2;
+            const avgG = (data.n1.gas + data.n2.gas) / 2;
+            const avgB = (data.n1.bising + data.n2.bising) / 2;
+
+            document.getElementById('avgSuhu').innerText = avgS.toFixed(1);
+            document.getElementById('avgHum').innerText = avgH.toFixed(1);
+            document.getElementById('avgGas').innerText = Math.round(avgG);
+            document.getElementById('avgBising').innerText = avgB.toFixed(1);
+            
+            // Logika Status Gabungan
+            if(avgS > 32 || avgB > 85 || avgG > 200) {
+                document.getElementById('statusBar').classList.add('danger');
+                document.getElementById('statusTxt').innerText = "PERINGATAN: KONDISI TIDAK IDEAL";
+            } else {
+                document.getElementById('statusBar').classList.remove('danger');
+                document.getElementById('statusTxt').innerText = "SISTEM AMAN";
             }
         }
 
-        function updateUI(textId, svgId, value, max) {
-            document.getElementById(textId).innerText = parseFloat(value).toFixed(1);
-            let percent = value / max;
-            let offset = 282.7 - (percent * 282.7);
-            document.getElementById(svgId).style.strokeDashoffset = offset;
-        }
+        client.connect({ onSuccess: () => {
+            client.subscribe("kampus/k3lab/#");
+            console.log("Connected");
+        }});
     </script>
 </body>
 </html>
-
